@@ -1,7 +1,9 @@
 
 # Cached network image
 A flutter library to show image from S3 repository and keep them in the cache directory.
+
 This package is based from [https://github.com/renefloor/flutter_cached_network_image].
+With how to download and show images from S3 repository in mind.
 
 ## How to add
 
