@@ -1,7 +1,10 @@
+library s3_cache_image;
+
 import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 
 typedef Future<String> ExpiredURLCallback(String id);
 
@@ -14,39 +17,48 @@ class S3CacheManager {
 
   S3CacheManager._internal();
 
-  Future<String> getPath(String id) async {
+  final _logger = Logger.detached('S3CacheManager');
+  var _path = '/s3/cache/images/';
+
+  set dirPath(String newPath) {
+    _logger.warning('PATH CHANGE FROM $_path to $newPath');
+    _path = newPath;
+    print(_path);
+  }
+
+  String get currentPath => _path;
+
+  Future<String> _getPath(String id) async {
     final dir = await getTemporaryDirectory();
-    return dir.path + '/images/' + id;
+    print(currentPath);
+    return dir.path + _path + id;
   }
 
   Future<File> getFile(
       String url, String id, ExpiredURLCallback callback) async {
-    // CHECK IF FILE EXIST
-    // IF FILE EXIST THEN RETURN FILE IMMEDIATELY
-
-    final path = await getPath(id);
-    print('$path');
+    final path = await _getPath(id);
+    _logger.finest('Start fetching file at  path $path');
     final file = File(path);
     if (file.existsSync()) {
-//      print('>>>>>>>>> FILE EXIST - RETURN');
+      _logger.fine('File exist at path $path');
       return file;
     }
 
-    // PARSE URL AND CHECK IF URL EXPIRED OR NOT
-    // IF URL IS EXPIRED CALL EXPIRED CALLBACK TO GET NEW URL
     var _downloadUrl = url;
-    if (isExpired(url)) {
-//      print('>>>>>>>>> URL IS EXPIRED - REFETCH');
+    if (_isExpired(url)) {
+      _logger.fine('Url expired, refresh with expired callback');
       if (callback == null) {
-//        print('>>>>>>>>> NO REFETCH CALLBACK RETURN NULL');
+        _logger.warning('No refetch callback provided, return null');
         return null;
       }
       _downloadUrl = await callback(id);
     }
     if (_downloadUrl == null) {
+      _logger.warning('No response from expired callback, return null');
       return null;
     }
-//    print('>>>>>>>>> URL NOT EXPIRED DOWNLOAD');
+
+    _logger.fine('Valid Url, commencing download for $_downloadUrl');
     return await _downloadFile(_downloadUrl, id);
   }
 
@@ -55,32 +67,33 @@ class S3CacheManager {
     try {
       response = await http.get(url);
     } catch (e) {
-//      print('>>>>>>>>>>>>>>> ERROR DOWNLOAD IMAGE ${e.toString()}');
+      _logger.severe('Failed to download image with error ${e.toString()}', e,
+          StackTrace.current);
       return null;
     }
 
     if (response != null) {
-//      print('>>>>>>>>> DOWNLOAD  RESPONSE NOT NULL');
       if (response.statusCode == 200) {
-//        print('>>>>>>>>> STATUS CODE 200');
-        final path = await getPath(id);
+        final path = await _getPath(id);
         final folder = File(path).parent;
         if (!(await folder.exists())) {
           folder.createSync(recursive: true);
         }
         final file = await File(path).writeAsBytes(response.bodyBytes);
+        _logger.fine('Download success and file saved to path $path');
         return file;
       } else {
-//        print('>>>>>>>>> STATUS CODE ${response.statusCode} >>>>>> RETURN NULL');
+        _logger
+            .warning('Download failed with status code ${response.statusCode}');
         return null;
       }
     } else {
-//      print('>>>>>>>>> RESPONSE NULL');
+      _logger.warning('No response from server');
       return null;
     }
   }
 
-  bool isExpired(String url) {
+  bool _isExpired(String url) {
     final uri = Uri.dataFromString(url);
     final queries = uri.queryParameters;
     final expiry = int.parse(queries['Expires']);
@@ -90,4 +103,35 @@ class S3CacheManager {
     }
     return true;
   }
+
+
+  Future<bool> clearCache() async {
+    final tempDir = await getTemporaryDirectory();
+    final cachePath = tempDir.path + _path;
+    final cacheDir = Directory(cachePath);
+
+    try {
+      await cacheDir.delete(recursive: true);
+    } catch (e) {
+      _logger.severe('Failed to delete s3 cache ${e.toString()}', e, StackTrace.current);
+      return false;
+    }
+    return true;
+  }
+
+  Future<int> getCacheSize() async {
+    final tempDir = await getTemporaryDirectory();
+    final cachePath = tempDir.path + _path;
+    final cacheDir = Directory(cachePath);
+    
+    var size = 0;
+    try {
+      cacheDir.listSync().forEach((var file) => size += file.statSync().size);
+      return size;
+    } catch (_) {
+      return null;
+    }
+  }
+
+
 }

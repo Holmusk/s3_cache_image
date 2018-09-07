@@ -6,17 +6,29 @@ import 'dart:typed_data';
 import 'dart:ui' as ui show instantiateImageCodec, Codec;
 
 import 'package:flutter/foundation.dart';
+import 'package:logging/logging.dart';
 import 'package:flutter/material.dart';
-import 'src/S3_cache_manager.dart';
+import 'src/s3_cache_manager.dart';
 
-
-/// CachedNetworkImage for Flutter
-/// Copyright (c) 2017 Rene Floor
+/// s3_cache_image for Flutter
+/// Copyright (c) 2018 Holmusk
 /// Released under MIT License.
 
+void setS3CachePath(String newPath) {
+  S3CacheManager().dirPath = newPath;
+}
+
+Future<bool> clearS3Cache() {
+  return S3CacheManager().clearCache();
+}
+
+Future<int> getS3CacheSize() {
+  return S3CacheManager().getCacheSize();
+}
+
+typedef void DebugCallback(LogRecord log);
+
 class S3CachedImage extends StatefulWidget {
-
-
   /// Creates a widget that displays a [placeholder] while an [S3ImageURL] is loading
   /// then cross-fades to display the [S3ImageURL].
   /// The [imageUrl] and [cacheId]  arguments must not be null. Arguments [width],
@@ -27,6 +39,7 @@ class S3CachedImage extends StatefulWidget {
     @required this.imageURL,
     @required this.cacheId,
     this.onExpired,
+    this.onDebug,
     this.errorWidget,
     this.placeholder,
     this.width,
@@ -38,14 +51,20 @@ class S3CachedImage extends StatefulWidget {
 
   /// The target image URL that is displayed.
   final String imageURL;
+
   /// The target image Id that is displayed.
   final String cacheId;
 
+  /// Callback to refresh expired url
   final ExpiredURLCallback onExpired;
 
-  /// Widget displayed while the target [S3ImageURL] is loading.
-  final Widget errorWidget;
+  // Callback exposing log stream for debugging
+  final DebugCallback onDebug;
+
   /// Widget displayed while the target [S3ImageURL] failed loading.
+  final Widget errorWidget;
+
+  /// Widget displayed while the target [S3ImageURL] is loading.
   final Widget placeholder;
 
   /// If non-null, require the image to have this width.
@@ -55,6 +74,7 @@ class S3CachedImage extends StatefulWidget {
   /// placeholder widget does not match that of the target image. The size is
   /// also affected by the scale factor.
   final double width;
+
   /// If non-null, require the image to have this height.
   ///
   /// If null, the image will pick a size that best preserves its intrinsic
@@ -62,6 +82,7 @@ class S3CachedImage extends StatefulWidget {
   /// placeholder widget does not match that of the target image. The size is
   /// also affected by the scale factor.
   final double height;
+
   /// How to inscribe the image into the space allocated during layout.
   ///
   /// The default varies based on the other fields. See the discussion at
@@ -72,22 +93,24 @@ class S3CachedImage extends StatefulWidget {
   _S3CachedImageState createState() => _S3CachedImageState();
 }
 
-
-
 /// The phases a [CachedNetworkImage] goes through.
 @visibleForTesting
 enum ImagePhase {
   /// Initial state
-  START,
-  /// Waiting for target image to load
-  WAITING,
-  /// Fading out previous image.
-  FADEOUT,
-  /// Fading in new image.
-  FADEIN,
-  /// Fade-in complete.
-  COMPLETED }
+  start,
 
+  /// Waiting for target image to load
+  waiting,
+
+  /// Fading out previous image.
+  fadeout,
+
+  /// Fading in new image.
+  fadein,
+
+  /// Fade-in complete.
+  completed
+}
 
 typedef void _ImageProviderResolverListener();
 
@@ -119,7 +142,6 @@ class _ImageProviderResolver {
   }
 
   void _handleImageChanged(ImageInfo imageInfo, bool synchronousCall) {
-//    print(' IMAGE CHANGED >>>>>>>> $listener');
     _imageInfo = imageInfo;
     listener();
   }
@@ -137,9 +159,11 @@ class _S3CachedImageState extends State<S3CachedImage>
   AnimationController _controller;
   Animation<double> _animation;
 
-  ImagePhase _phase = ImagePhase.START;
+  ImagePhase _phase = ImagePhase.start;
 
   ImagePhase get state => _phase;
+
+  final _logger = Logger('S3CacheImage');
 
   bool _hasError;
 
@@ -161,18 +185,24 @@ class _S3CachedImageState extends State<S3CachedImage>
       ..addStatusListener((_) {
         _updatePhase();
       });
-
+      
+      if (widget.onDebug != null) {
+        print('ONDEBUG != NULL');
+        // hierarchicalLoggingEnabled = true;
+        Logger.root.level = Level.ALL;
+        Logger.root.onRecord.listen((log) {
+          print('LOG $log');
+        });
+      }
+      
     super.initState();
   }
 
   @override
   void didChangeDependencies() {
-//    print('CHANGE DEPENDENCIES');
     _imageProvider
         .obtainKey(createLocalImageConfiguration(context))
-        .then<void>((key) {
-//      setState(() => _hasError = true);
-    });
+        .then<void>((key) {});
 
     _resolveImage();
     super.didChangeDependencies();
@@ -180,17 +210,13 @@ class _S3CachedImageState extends State<S3CachedImage>
 
   @override
   void didUpdateWidget(S3CachedImage oldWidget) {
-//    print('UPDATE WIDGET');
-
     super.didUpdateWidget(oldWidget);
 
     if (widget.cacheId != oldWidget.cacheId ||
         widget.placeholder != widget.placeholder) {
-//      print('CHANGE WIDGET CALL RESOLVE AGAIN');
       _imageProvider = S3CachedNetworkImageProvider(
           widget.imageURL, widget.cacheId, widget.onExpired,
           errorListener: _imageLoadingFailed);
-
       _resolveImage();
     }
   }
@@ -202,24 +228,26 @@ class _S3CachedImageState extends State<S3CachedImage>
   }
 
   void _resolveImage() {
+    _logger.finest('Resolve image');
     _imageResolver.resolve(_imageProvider);
-    if (_phase == ImagePhase.START) {
+    if (_phase == ImagePhase.start) {
       _updatePhase();
     }
   }
 
   void _updatePhase() {
+    _logger.finest('Update phase $_phase');
     setState(() {
       switch (_phase) {
-        case ImagePhase.START:
+        case ImagePhase.start:
           if (_imageResolver._imageInfo != null || _hasError)
-            _phase = ImagePhase.COMPLETED;
+            _phase = ImagePhase.completed;
           else
-            _phase = ImagePhase.WAITING;
+            _phase = ImagePhase.waiting;
           break;
-        case ImagePhase.WAITING:
+        case ImagePhase.waiting:
           if (_hasError && widget.errorWidget == null) {
-            _phase = ImagePhase.COMPLETED;
+            _phase = ImagePhase.completed;
             return;
           }
 
@@ -231,18 +259,18 @@ class _S3CachedImageState extends State<S3CachedImage>
             }
           }
           break;
-        case ImagePhase.FADEOUT:
+        case ImagePhase.fadeout:
           if (_controller.status == AnimationStatus.dismissed) {
             _startFadeIn();
           }
           break;
-        case ImagePhase.FADEIN:
+        case ImagePhase.fadein:
           if (_controller.status == AnimationStatus.completed) {
             // Done finding in new image.
-            _phase = ImagePhase.COMPLETED;
+            _phase = ImagePhase.completed;
           }
           break;
-        case ImagePhase.COMPLETED:
+        case ImagePhase.completed:
           _hasError = _imageResolver._imageInfo == null;
           // Nothing to do.
           break;
@@ -251,16 +279,18 @@ class _S3CachedImageState extends State<S3CachedImage>
   }
 
   void _startFadeOut() {
+    _logger.finest('Start fade out');
     _controller.duration = const Duration(milliseconds: 300);
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _phase = ImagePhase.FADEOUT;
+    _phase = ImagePhase.fadeout;
     _controller.reverse(from: 1.0);
   }
 
   void _startFadeIn() {
+    _logger.finest('Start fade in');
     _controller.duration = const Duration(milliseconds: 700);
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
-    _phase = ImagePhase.FADEIN;
+    _phase = ImagePhase.fadein;
     _controller.forward(from: 0.0);
   }
 
@@ -274,30 +304,26 @@ class _S3CachedImageState extends State<S3CachedImage>
   bool get _isShowingPlaceholder {
     assert(_phase != null);
     switch (_phase) {
-      case ImagePhase.START:
-      case ImagePhase.WAITING:
-      case ImagePhase.FADEOUT:
+      case ImagePhase.start:
+      case ImagePhase.waiting:
+      case ImagePhase.fadeout:
         return true;
-      case ImagePhase.FADEIN:
-      case ImagePhase.COMPLETED:
+      case ImagePhase.fadein:
+      case ImagePhase.completed:
         return _hasError && widget.errorWidget == null;
     }
     return true;
   }
 
   void _imageLoadingFailed() {
-//    print('>>>>>>>>>>>>>>>>> Image LOADING FAILED');
+    _logger.warning('Image loading failed');
     _hasError = true;
     _updatePhase();
   }
 
   @override
   Widget build(BuildContext context) {
-//    return widget.errorWidget;
-//  return widget.placeholder;
-
-//  print('HAS ERROR >>>>> $_hasError');
-    assert(_phase != ImagePhase.START);
+    assert(_phase != ImagePhase.start);
     if (_isShowingPlaceholder && widget.placeholder != null) {
       return _fadedWidget(widget.placeholder);
     }
@@ -334,10 +360,6 @@ class _S3CachedImageState extends State<S3CachedImage>
           'image stream', _imageResolver._imageStream));
   }
 }
-
-///=============================================================
-/// IMAGE PROVIDER
-///=============================================================
 
 typedef void ErrorListener();
 
@@ -380,11 +402,9 @@ class S3CachedNetworkImageProvider
   }
 
   Future<ui.Codec> _loadAsync(S3CachedNetworkImageProvider key) async {
-//    print('LOAD ASYNC');
     var cacheManager = S3CacheManager();
     var file = await cacheManager.getFile(url, cacheId, callback);
     if (file == null) {
-//      print('GET FILE RETURNED NULL');
       if (errorListener != null) {
         errorListener();
       }
@@ -395,14 +415,12 @@ class S3CachedNetworkImageProvider
 
   Future<ui.Codec> _loadAsyncFromFile(
       S3CachedNetworkImageProvider key, File file) async {
-//    print('LOAD FROM FILE');
     assert(key == this);
 
     final Uint8List bytes = await file.readAsBytes();
 
     if (bytes.lengthInBytes == 0) {
       if (errorListener != null) {
-//        print('FILE IS EMPTY');
         errorListener();
       }
       return null;

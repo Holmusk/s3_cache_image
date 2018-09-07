@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:s3_cache_image/s3_cache_image.dart';
-import 'package:path_provider/path_provider.dart';
 
 void main() => runApp(MyApp());
 
@@ -26,32 +23,20 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+
+  @override
+  void initState() {
+    setS3CachePath('/s3/cache/images/food/');
+    super.initState();
+  }
+
   Future<bool> clearDiskCachedImages() async {
-    final tempDir = await getTemporaryDirectory();
-    final cachePath = tempDir.path + '/images';
-    final cacheDir = Directory(cachePath);
-    try {
-      await cacheDir.delete(recursive: true);
-    } catch (_) {
-      return false;
-    }
-    return true;
+    return clearS3Cache();
   }
 
   /// Return the disk cache directory size.
   Future<int> getDiskCachedImagesSize() async {
-    final tempDir = await getTemporaryDirectory();
-    final cachePath = tempDir.path + '/images';
-    final cacheDir = Directory(cachePath);
-
-    print('${cacheDir.path}');
-    var size = 0;
-    try {
-      cacheDir.listSync().forEach((var file) => size += file.statSync().size);
-      return size;
-    } catch (_) {
-      return null;
-    }
+    return getS3CacheSize();
   }
 
   @override
@@ -90,14 +75,16 @@ class _HomePageState extends State<HomePage> {
               height: width,
               onExpired: (id) {
                 final completer = Completer<String>()
-                  ..complete('INSERT S3 URL');
+                  ..complete('INSERT S3 URL HERE');
                 return completer.future;
               },
-//        onExpired: null,
-              imageURL: 'INSERT S3 URL',
-              cacheId: '123-456-789',
+              onDebug: (log) {
+                print('LOG $log');
+              },
+              imageURL: 'INSERT S3 URL HERE',
+              cacheId: 'INSERT CACHE ID HERE',
               errorWidget: Center(child: Text('ERROR')),
-              placeholder: Center(child: Text('Loading')))),
+              placeholder: Center(child: Text('LOADING')))),
     );
   }
 }

@@ -1,6 +1,6 @@
 # example
 
-A new Flutter project.
+An example for how to use s3_cache_image pacakage
 
 ## Getting Started
 
