@@ -75,14 +75,15 @@ class _HomePageState extends State<HomePage> {
               height: width,
               onExpired: (id) {
                 final completer = Completer<String>()
-                  ..complete('INSERT S3 URL HERE');
+                  ..complete('REMOTE URL');
                 return completer.future;
               },
               onDebug: (log) {
                 print('LOG $log');
               },
-              imageURL: 'INSERT S3 URL HERE',
-              cacheId: 'INSERT CACHE ID HERE',
+              imageURL: 'REMOTE URL',
+              cacheId: 'CACHE ID',
+              remoteId: 'REMOTE ID',
               errorWidget: Center(child: Text('ERROR')),
               placeholder: Center(child: Text('LOADING')))),
     );

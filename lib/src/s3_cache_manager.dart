@@ -35,7 +35,7 @@ class S3CacheManager {
   }
 
   Future<File> getFile(
-      String url, String id, ExpiredURLCallback callback) async {
+      String url, String id, String remoteId, ExpiredURLCallback callback) async {
     final path = await _getPath(id);
     _logger.finest('Start fetching file at  path $path');
     final file = File(path);
@@ -51,7 +51,7 @@ class S3CacheManager {
         _logger.warning('No refetch callback provided, return null');
         return null;
       }
-      _downloadUrl = await callback(id);
+      _downloadUrl = await callback(remoteId);
     }
     if (_downloadUrl == null) {
       _logger.warning('No response from expired callback, return null');

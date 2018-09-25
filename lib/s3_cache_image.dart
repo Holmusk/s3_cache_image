@@ -38,6 +38,7 @@ class S3CachedImage extends StatefulWidget {
     Key key,
     @required this.imageURL,
     @required this.cacheId,
+    @required this.remoteId,
     this.onExpired,
     this.onDebug,
     this.errorWidget,
@@ -47,13 +48,17 @@ class S3CachedImage extends StatefulWidget {
     this.fit,
   })  : assert(imageURL != null),
         assert(cacheId != null),
+        assert(remoteId != null),
         super(key: key);
 
   /// The target image URL that is displayed.
   final String imageURL;
 
-  /// The target image Id that is displayed.
+  /// The target image Id that is saved to local storage.
   final String cacheId;
+
+  /// The target remote id to refetch data
+  final String remoteId;
 
   /// Callback to refresh expired url
   final ExpiredURLCallback onExpired;
@@ -172,7 +177,7 @@ class _S3CachedImageState extends State<S3CachedImage>
     _hasError = false;
 
     _imageProvider = S3CachedNetworkImageProvider(
-        widget.imageURL, widget.cacheId, widget.onExpired,
+        widget.imageURL, widget.cacheId, widget.remoteId, widget.onExpired,
         errorListener: _imageLoadingFailed);
 
     _imageResolver =
@@ -185,16 +190,16 @@ class _S3CachedImageState extends State<S3CachedImage>
       ..addStatusListener((_) {
         _updatePhase();
       });
-      
-      if (widget.onDebug != null) {
-        print('ONDEBUG != NULL');
-        // hierarchicalLoggingEnabled = true;
-        Logger.root.level = Level.ALL;
-        Logger.root.onRecord.listen((log) {
-          print('LOG $log');
-        });
-      }
-      
+
+    if (widget.onDebug != null) {
+      print('ONDEBUG != NULL');
+      // hierarchicalLoggingEnabled = true;
+      Logger.root.level = Level.ALL;
+      Logger.root.onRecord.listen((log) {
+        print('LOG $log');
+      });
+    }
+
     super.initState();
   }
 
@@ -215,7 +220,7 @@ class _S3CachedImageState extends State<S3CachedImage>
     if (widget.cacheId != oldWidget.cacheId ||
         widget.placeholder != widget.placeholder) {
       _imageProvider = S3CachedNetworkImageProvider(
-          widget.imageURL, widget.cacheId, widget.onExpired,
+          widget.imageURL, widget.cacheId, widget.remoteId, widget.onExpired,
           errorListener: _imageLoadingFailed);
       _resolveImage();
     }
@@ -365,7 +370,8 @@ typedef void ErrorListener();
 
 class S3CachedNetworkImageProvider
     extends ImageProvider<S3CachedNetworkImageProvider> {
-  const S3CachedNetworkImageProvider(this.url, this.cacheId, this.callback,
+  const S3CachedNetworkImageProvider(
+      this.url, this.cacheId, this.remoteId, this.callback,
       {this.scale: 1.0, this.errorListener})
       : assert(url != null),
         assert(scale != null);
@@ -374,6 +380,8 @@ class S3CachedNetworkImageProvider
   final String url;
 
   final String cacheId;
+
+  final String remoteId;
 
   final ExpiredURLCallback callback;
 
@@ -403,7 +411,7 @@ class S3CachedNetworkImageProvider
 
   Future<ui.Codec> _loadAsync(S3CachedNetworkImageProvider key) async {
     var cacheManager = S3CacheManager();
-    var file = await cacheManager.getFile(url, cacheId, callback);
+    var file = await cacheManager.getFile(url, cacheId, remoteId, callback);
     if (file == null) {
       if (errorListener != null) {
         errorListener();
