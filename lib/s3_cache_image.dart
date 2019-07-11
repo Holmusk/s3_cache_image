@@ -123,10 +123,15 @@ class _ImageProviderResolver {
   _ImageProviderResolver({
     @required this.state,
     @required this.listener,
-  });
+  }) {
+    imageStreamListener = ImageStreamListener(
+      _handleImageChanged,
+    );
+  }
 
   final _S3CachedImageState state;
   final _ImageProviderResolverListener listener;
+  ImageStreamListener imageStreamListener;
 
   S3CachedImage get widget => state.widget;
 
@@ -141,8 +146,8 @@ class _ImageProviderResolver {
             : null));
 
     if (_imageStream.key != oldImageStream?.key) {
-      oldImageStream?.removeListener(_handleImageChanged);
-      _imageStream.addListener(_handleImageChanged);
+      oldImageStream?.removeListener(imageStreamListener);
+      _imageStream.addListener(imageStreamListener);
     }
   }
 
@@ -152,7 +157,7 @@ class _ImageProviderResolver {
   }
 
   void stopListening() {
-    _imageStream?.removeListener(_handleImageChanged);
+    _imageStream?.removeListener(imageStreamListener);
   }
 }
 
@@ -402,11 +407,12 @@ class S3CachedNetworkImageProvider
     return MultiFrameImageStreamCompleter(
         codec: _loadAsync(key),
         scale: key.scale,
-        informationCollector: (StringBuffer information) {
-          information
-            ..writeln('Image provider: $this')
-            ..write('Image key: $key');
-        });
+//        informationCollector: (StringBuffer information) {
+//          information
+//            ..writeln('Image provider: $this')
+//            ..write('Image key: $key');
+//        }
+        );
   }
 
   Future<ui.Codec> _loadAsync(S3CachedNetworkImageProvider key) async {
