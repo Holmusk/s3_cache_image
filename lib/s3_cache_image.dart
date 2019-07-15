@@ -416,8 +416,8 @@ class S3CachedNetworkImageProvider
   }
 
   Future<ui.Codec> _loadAsync(S3CachedNetworkImageProvider key) async {
-    var cacheManager = S3CacheManager();
     if (url.isNotEmpty && cacheId.isNotEmpty && remoteId.isNotEmpty) {
+      var cacheManager = S3CacheManager();
       var file = await cacheManager.getFile(url, cacheId, remoteId, callback);
       if (file == null) {
         if (errorListener != null) {
