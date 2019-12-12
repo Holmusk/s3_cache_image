@@ -402,19 +402,6 @@ class S3CachedNetworkImageProvider
     return new SynchronousFuture<S3CachedNetworkImageProvider>(this);
   }
 
-  @override
-  ImageStreamCompleter load(S3CachedNetworkImageProvider key) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key),
-      scale: key.scale,
-//        informationCollector: (StringBuffer information) {
-//          information
-//            ..writeln('Image provider: $this')
-//            ..write('Image key: $key');
-//        }
-    );
-  }
-
   Future<ui.Codec> _loadAsync(S3CachedNetworkImageProvider key) async {
     if (url.isNotEmpty && cacheId.isNotEmpty && remoteId.isNotEmpty) {
       var cacheManager = S3CacheManager();
@@ -458,4 +445,17 @@ class S3CachedNetworkImageProvider
 
   @override
   String toString() => '$runtimeType(id: $cacheId, url: $url scale: $scale)';
+
+  @override
+  ImageStreamCompleter load(S3CachedNetworkImageProvider key, decode) {
+    return MultiFrameImageStreamCompleter(
+      codec: _loadAsync(key),
+      scale: key.scale,
+//        informationCollector: (StringBuffer information) {
+//          information
+//            ..writeln('Image provider: $this')
+//            ..write('Image key: $key');
+//        }
+    );
+  }
 }
