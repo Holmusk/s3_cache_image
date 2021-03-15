@@ -123,10 +123,15 @@ class _ImageProviderResolver {
   _ImageProviderResolver({
     @required this.state,
     @required this.listener,
-  });
+  }) {
+    imageStreamListener = ImageStreamListener(
+      _handleImageChanged,
+    );
+  }
 
   final _S3CachedImageState state;
   final _ImageProviderResolverListener listener;
+  ImageStreamListener imageStreamListener;
 
   S3CachedImage get widget => state.widget;
 
@@ -141,8 +146,8 @@ class _ImageProviderResolver {
             : null));
 
     if (_imageStream.key != oldImageStream?.key) {
-      oldImageStream?.removeListener(_handleImageChanged);
-      _imageStream.addListener(_handleImageChanged);
+      oldImageStream?.removeListener(imageStreamListener);
+      _imageStream.addListener(imageStreamListener);
     }
   }
 
@@ -152,7 +157,7 @@ class _ImageProviderResolver {
   }
 
   void stopListening() {
-    _imageStream?.removeListener(_handleImageChanged);
+    _imageStream?.removeListener(imageStreamListener);
   }
 }
 
@@ -397,28 +402,18 @@ class S3CachedNetworkImageProvider
     return new SynchronousFuture<S3CachedNetworkImageProvider>(this);
   }
 
-  @override
-  ImageStreamCompleter load(S3CachedNetworkImageProvider key) {
-    return MultiFrameImageStreamCompleter(
-        codec: _loadAsync(key),
-        scale: key.scale,
-        informationCollector: (StringBuffer information) {
-          information
-            ..writeln('Image provider: $this')
-            ..write('Image key: $key');
-        });
-  }
-
   Future<ui.Codec> _loadAsync(S3CachedNetworkImageProvider key) async {
-    var cacheManager = S3CacheManager();
-    var file = await cacheManager.getFile(url, cacheId, remoteId, callback);
-    if (file == null) {
-      if (errorListener != null) {
-        errorListener();
+    if (url.isNotEmpty && cacheId.isNotEmpty && remoteId.isNotEmpty) {
+      var cacheManager = S3CacheManager();
+      var file = await cacheManager.getFile(url, cacheId, remoteId, callback);
+      if (file == null) {
+        if (errorListener != null) {
+          errorListener();
+        }
+        return null;
       }
-      return null;
+      return await _loadAsyncFromFile(key, file);
     }
-    return await _loadAsyncFromFile(key, file);
   }
 
   Future<ui.Codec> _loadAsyncFromFile(
@@ -450,4 +445,17 @@ class S3CachedNetworkImageProvider
 
   @override
   String toString() => '$runtimeType(id: $cacheId, url: $url scale: $scale)';
+
+  @override
+  ImageStreamCompleter load(S3CachedNetworkImageProvider key, decode) {
+    return MultiFrameImageStreamCompleter(
+      codec: _loadAsync(key),
+      scale: key.scale,
+//        informationCollector: (StringBuffer information) {
+//          information
+//            ..writeln('Image provider: $this')
+//            ..write('Image key: $key');
+//        }
+    );
+  }
 }
