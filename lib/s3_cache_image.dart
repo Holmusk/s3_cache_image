@@ -39,6 +39,7 @@ class S3CachedImage extends StatefulWidget {
     @required this.imageURL,
     @required this.cacheId,
     @required this.remoteId,
+    this.showTransition = true,
     this.onExpired,
     this.onDebug,
     this.errorWidget,
@@ -93,6 +94,9 @@ class S3CachedImage extends StatefulWidget {
   /// The default varies based on the other fields. See the discussion at
   /// [paintImage].
   final BoxFit fit;
+
+  ///If false doenst animate between child and placeholder
+  final bool showTransition;
 
   @override
   _S3CachedImageState createState() => _S3CachedImageState();
@@ -290,7 +294,8 @@ class _S3CachedImageState extends State<S3CachedImage>
 
   void _startFadeOut() {
     _logger.finest('Start fade out');
-    _controller.duration = const Duration(milliseconds: 300);
+    _controller.duration =
+        Duration(milliseconds: widget.showTransition ? 300 : 0);
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _phase = ImagePhase.fadeout;
     _controller.reverse(from: 1.0);
@@ -298,7 +303,8 @@ class _S3CachedImageState extends State<S3CachedImage>
 
   void _startFadeIn() {
     _logger.finest('Start fade in');
-    _controller.duration = const Duration(milliseconds: 700);
+    _controller.duration =
+        Duration(milliseconds: widget.showTransition ? 700 : 0);
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _phase = ImagePhase.fadein;
     _controller.forward(from: 0.0);
