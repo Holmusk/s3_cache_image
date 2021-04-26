@@ -34,8 +34,8 @@ class S3CacheManager {
     return dir.path + _path + id;
   }
 
-  Future<File> getFile(
-      String url, String id, String remoteId, ExpiredURLCallback callback) async {
+  Future<File> getFile(String url, String id, String remoteId,
+      ExpiredURLCallback callback) async {
     final path = await _getPath(id);
     _logger.finest('Start fetching file at  path $path');
     final file = File(path);
@@ -65,7 +65,7 @@ class S3CacheManager {
   Future<File> _downloadFile(String url, String id) async {
     http.Response response;
     try {
-      response = await http.get(url);
+      response = await http.get(Uri(path: url));
     } catch (e) {
       _logger.severe('Failed to download image with error ${e.toString()}', e,
           StackTrace.current);
@@ -104,7 +104,6 @@ class S3CacheManager {
     return true;
   }
 
-
   Future<bool> clearCache() async {
     final tempDir = await getTemporaryDirectory();
     final cachePath = tempDir.path + _path;
@@ -113,7 +112,8 @@ class S3CacheManager {
     try {
       await cacheDir.delete(recursive: true);
     } catch (e) {
-      _logger.severe('Failed to delete s3 cache ${e.toString()}', e, StackTrace.current);
+      _logger.severe(
+          'Failed to delete s3 cache ${e.toString()}', e, StackTrace.current);
       return false;
     }
     return true;
@@ -123,7 +123,7 @@ class S3CacheManager {
     final tempDir = await getTemporaryDirectory();
     final cachePath = tempDir.path + _path;
     final cacheDir = Directory(cachePath);
-    
+
     var size = 0;
     try {
       cacheDir.listSync().forEach((var file) => size += file.statSync().size);
@@ -132,6 +132,4 @@ class S3CacheManager {
       return null;
     }
   }
-
-
 }
