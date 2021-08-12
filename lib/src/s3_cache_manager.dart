@@ -65,7 +65,7 @@ class S3CacheManager {
   Future<File> _downloadFile(String url, String id) async {
     http.Response response;
     try {
-      response = await http.get(url);
+      response = await http.get(Uri.parse(url));
     } catch (e) {
       _logger.severe('Failed to download image with error ${e.toString()}', e,
           StackTrace.current);
