@@ -96,7 +96,8 @@ class S3CacheManager {
   bool _isExpired(String url) {
     final uri = Uri.dataFromString(url);
     final queries = uri.queryParameters;
-    final expiry = int.tryParse(queries['Expires']);
+    final expires = queries['Expires'];
+    final expiry = int.tryParse(expires ?? '');
     if (expiry != null) {
       final expiryDate = DateTime.fromMillisecondsSinceEpoch(expiry * 1000);
       return DateTime.now().isAfter(expiryDate);
